@@ -1,7 +1,15 @@
-%% ex: ft=erlang
 {application, 'erlang-serial',
-    [{description,"Erlang driver for serial communication"},
-     {vsn,"1.0"},
-     {registered,[]},
-     {applications,[kernel,stdlib]},
-     {modules,[serial]}]}.
+ [{description, "An OTP library"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {applications,
+   [kernel,
+    stdlib
+   ]},
+  {env,[]},
+  {modules, []},
+
+  {contributors, []},
+  {licenses, []},
+  {links, []}
+ ]}.

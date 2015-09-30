@@ -108,6 +108,20 @@ bit_rate bitrate_table[MAXSPEED] = {
   {230400 , B230400 }
 };
 
+speed_t get_speed(int speed);
+void set_raw_tty_mode(int fd);
+void set_tty_speed(int fd, speed_t new_ispeed, speed_t new_ospeed);
+int get_tbh_size(char buf[]);
+void set_tbh_size(char buf[], int size);
+void tbh_write(int fd, char buf[], int buffsize);
+int read_at_least(int fd, char buf[], int nr);
+int tbh_read(int fd, char buf[], int buffsize);
+void write_to_tty(int ttyfd, int fillfd, int totalsize, int buffsize,
+		  char buf[], int buffmaxsize);
+int main(int argc, char *argv[]);
+
+
+
 /**********************************************************************
  * Name: get_speed
  *
@@ -239,7 +253,7 @@ void set_tty_speed(int fd, speed_t new_ispeed, speed_t new_ospeed)
  * Desc: returns the size of a two_byte_header message (from Erlang).
  */
 
-int get_tbh_size(unsigned char buf[])
+int get_tbh_size(char buf[])
 {
   return (((int) buf[0]) << 8) + ((int) buf[1]);
 }
@@ -249,10 +263,10 @@ int get_tbh_size(unsigned char buf[])
  * Desc: sets the first two bytes of the buffer to its size
  */
 
-void set_tbh_size(unsigned char buf[], int size)
+void set_tbh_size(char buf[], int size)
 {
-  buf[1] = (unsigned char) (size & 0xff);
-  buf[0] = (unsigned char) ((size >> 8) & 0xff);
+  buf[1] = (char) (size & 0xff);
+  buf[0] = (char) ((size >> 8) & 0xff);
   return;
 }
 
@@ -262,7 +276,7 @@ void set_tbh_size(unsigned char buf[], int size)
  *       at the beginning.
  */
 
-void tbh_write(int fd, unsigned char buf[], int buffsize)
+void tbh_write(int fd, char buf[], int buffsize)
 {
   char header_buf[TBHSIZE];
 
@@ -285,7 +299,7 @@ void tbh_write(int fd, unsigned char buf[], int buffsize)
  * Returns: The number of bytes read, or 0 if stream closed.
  */
 
-int read_at_least(int fd, unsigned char buf[], int nr)
+int read_at_least(int fd, char buf[], int nr)
 {
   int remaining = nr;
   int nr_read = 0;
@@ -314,7 +328,7 @@ int read_at_least(int fd, unsigned char buf[], int nr)
  *
  */
 
-int tbh_read(int fd, unsigned char buf[], int buffsize)
+int tbh_read(int fd, char buf[], int buffsize)
 {
   int remaining, msgsize;
 
@@ -342,7 +356,7 @@ int tbh_read(int fd, unsigned char buf[], int buffsize)
  */
 
 void write_to_tty(int ttyfd, int fillfd, int totalsize, int buffsize,
-		  unsigned char buf[], int buffmaxsize)
+		  char buf[], int buffmaxsize)
 {
   write(ttyfd,buf,buffsize);
   totalsize -= buffsize;
@@ -464,7 +478,7 @@ int main(int argc, char *argv[])
   {
     fd_set readfds;           /* file descriptor bit field for select */
     int    maxfd;             /* max file descriptor for select */
-    unsigned char buf[MAXLENGTH];    /* buffer for transfer between serial-user */
+    char   buf[MAXLENGTH];    /* buffer for transfer between serial-user */
     int    escapes;           /* number of consecutive escapes in cbreak */
 
     /* Set up initial bit field for select */

@@ -1,80 +1,101 @@
-## Copyright (c) 1996, 1999 Johan Bevemyr
-## Copyright (c) 2007, 2009 Tony Garnock-Jones
-## 
-## Permission is hereby granted, free of charge, to any person obtaining a copy
-## of this software and associated documentation files (the "Software"), to deal
-## in the Software without restriction, including without limitation the rights
-## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-## copies of the Software, and to permit persons to whom the Software is
-## furnished to do so, subject to the following conditions:
-## 
-## The above copyright notice and this permission notice shall be included in
-## all copies or substantial portions of the Software.
-## 
-## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-## IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-## FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-## AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-## LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-## OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-## THE SOFTWARE.
-##
-#  File:	 Makefile
-#  Author:	 Johan Bevemyr
-#  Created:	 Fri Oct 18 09:59:34 1996
+# Copyright 2012 Erlware, LLC. All Rights Reserved.
+#
+# This file is provided to you under the Apache License,
+# Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License.  You may obtain
+# a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
 
-VSN = 1.1
-INSTALL_DIR=serial-$(VSN)
-FULL_INSTALL_DIR=$(DESTDIR)/erlang/lib/$(INSTALL_DIR)
+ERLFLAGS= -pa $(CURDIR)/.eunit -pa $(CURDIR)/ebin -pa $(CURDIR)/deps/*/ebin
 
-WARNING_OPTIONS =
-LANGUAGE_OPTIONS = 
-COMPILER_OPTIONS = -g 
+DEPS_PLT=$(CURDIR)/.deps_plt
+DEPS=erts kernel stdlib
 
-CFLAGS   = $(WARNING_OPTIONS) $(LANGUAGE_OPTIONS) $(COMPILER_OPTIONS)
+# =============================================================================
+# Verify that the programs we need to run are installed on this system
+# =============================================================================
+ERL = $(shell which erl)
 
-######################################################################
+ifeq ($(ERL),)
+$(error "Erlang not available on this system")
+endif
 
-HEADER_FILES = c_src/serial.h
-SOURCE_FILES = c_src/serial.c
+REBAR=$(shell which rebar)
 
-OBJECT_FILES = $(SOURCE_FILES:.c=.o)
+ifeq ($(REBAR),)
+$(error "Rebar not available on this system")
+endif
 
-######################################################################
+.PHONY: all compile doc clean test dialyzer typer shell distclean pdf \
+  update-deps clean-common-test-data rebuild
 
-ERL_FILES = $(wildcard src/*.erl)
-BEAM_FILES = $(patsubst src/%.erl, ebin/%.beam, $(ERL_FILES))
+all: deps compile dialyzer test
 
-######################################################################
+# =============================================================================
+# Rules to build the system
+# =============================================================================
 
-all: priv/bin/serial $(BEAM_FILES)
+deps:
+	$(REBAR) get-deps
+	$(REBAR) compile
 
-install: all
-	@[ -n "$(DESTDIR)" ] || (echo "Set DESTDIR before running the install target."; false)
-	install -d $(FULL_INSTALL_DIR)/ebin
-	install -d $(FULL_INSTALL_DIR)/priv/bin
-	install -d $(FULL_INSTALL_DIR)/src
-	install -m 644 ebin/* $(FULL_INSTALL_DIR)/ebin
-	install -m 755 priv/bin/* $(FULL_INSTALL_DIR)/priv/bin
-	install -m 644 src/* $(FULL_INSTALL_DIR)/src
+update-deps:
+	$(REBAR) update-deps
+	$(REBAR) compile
 
-ebin/%.beam: src/%.erl ebin
-	erlc -o ebin $<
+compile:
+	$(REBAR) skip_deps=true compile
 
-ebin:
-	mkdir -p ebin
+doc:
+	$(REBAR) skip_deps=true doc
 
-priv/bin:
-	mkdir -p priv/bin
+eunit: compile clean-common-test-data
+	$(REBAR) skip_deps=true eunit
 
-priv/bin/serial: $(OBJECT_FILES) priv/bin
-	mkdir -p priv/bin
-	$(CC) -o $@ $(LDFLAGS) $(OBJECT_FILES) $(LDLIBS)
+test: compile eunit
+
+$(DEPS_PLT):
+	@echo Building local plt at $(DEPS_PLT)
+	@echo
+	dialyzer --output_plt $(DEPS_PLT) --build_plt \
+	   --apps $(DEPS) -r deps
+
+dialyzer: $(DEPS_PLT)
+	dialyzer --fullpath --plt $(DEPS_PLT) -Wrace_conditions -r ./ebin
+
+typer:
+	typer --plt $(DEPS_PLT) -r ./src
+
+shell: deps compile
+# You often want *rebuilt* rebar tests to be available to the
+# shell you have to call eunit (to get the tests
+# rebuilt). However, eunit runs the tests, which probably
+# fails (thats probably why You want them in the shell). This
+# runs eunit but tells make to ignore the result.
+	- @$(REBAR) skip_deps=true eunit
+	@$(ERL) $(ERLFLAGS)
+
+pdf:
+	pandoc README.md -o README.pdf
 
 clean:
-	rm -f priv/bin/serial $(OBJECT_FILES) $(BEAM_FILES)
+	- rm -rf $(CURDIR)/test/*.beam
+	- rm -rf $(CURDIR)/logs
+	- rm -rf $(CURDIR)/ebin
+	$(REBAR) skip_deps=true clean
 
-serial.o: serial.c serial.h
+distclean: clean
+	- rm -rf $(DEPS_PLT)
+	- rm -rvf $(CURDIR)/deps
 
-echo-version:
-	@echo $(VSN)
+rebuild: distclean deps compile escript dialyzer test
+
