@@ -29,73 +29,39 @@ ifeq ($(ERL),)
 $(error "Erlang not available on this system")
 endif
 
-REBAR=$(shell which rebar)
+REBAR=$(shell which rebar3)
 
 ifeq ($(REBAR),)
-$(error "Rebar not available on this system")
+$(error "Rebar3 not available on this system")
 endif
 
-.PHONY: all compile doc clean test dialyzer typer shell distclean pdf \
-  update-deps clean-common-test-data rebuild
+.PHONY: all compile doc clean test
 
-all: deps compile dialyzer test
+all: compile
 
 # =============================================================================
 # Rules to build the system
 # =============================================================================
 
-deps:
-	$(REBAR) get-deps
-	$(REBAR) compile
-
-update-deps:
-	$(REBAR) update-deps
-	$(REBAR) compile
 
 compile:
-	$(REBAR) skip_deps=true compile
+	$(REBAR) compile
 
 doc:
-	$(REBAR) skip_deps=true doc
+	$(REBAR) doc
 
 eunit: compile clean-common-test-data
-	$(REBAR) skip_deps=true eunit
+	$(REBAR) eunit
 
 test: compile eunit
-
-$(DEPS_PLT):
-	@echo Building local plt at $(DEPS_PLT)
-	@echo
-	dialyzer --output_plt $(DEPS_PLT) --build_plt \
-	   --apps $(DEPS) -r deps
-
-dialyzer: $(DEPS_PLT)
-	dialyzer --fullpath --plt $(DEPS_PLT) -Wrace_conditions -r ./ebin
-
-typer:
-	typer --plt $(DEPS_PLT) -r ./src
-
-shell: deps compile
-# You often want *rebuilt* rebar tests to be available to the
-# shell you have to call eunit (to get the tests
-# rebuilt). However, eunit runs the tests, which probably
-# fails (thats probably why You want them in the shell). This
-# runs eunit but tells make to ignore the result.
-	- @$(REBAR) skip_deps=true eunit
-	@$(ERL) $(ERLFLAGS)
-
-pdf:
-	pandoc README.md -o README.pdf
 
 clean:
 	- rm -rf $(CURDIR)/test/*.beam
 	- rm -rf $(CURDIR)/logs
 	- rm -rf $(CURDIR)/ebin
-	$(REBAR) skip_deps=true clean
+	$(REBAR) clean
 
 distclean: clean
 	- rm -rf $(DEPS_PLT)
 	- rm -rvf $(CURDIR)/deps
-
-rebuild: distclean deps compile escript dialyzer test
 
